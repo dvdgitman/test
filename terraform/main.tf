@@ -6,8 +6,8 @@ module "vpc" {
   cidr = "10.0.0.0/16"
 
   azs             = ["us-east-1a", "us-east-1b"]
-  private_subnets = ["10.0.1.0/24", "10.0.2.0/24"] # For Algo A, DB, RabbitMQ
-  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24"] # For ALB, NAT Gateway
+  private_subnets = ["10.0.1.0/24", "10.0.2.0/24"] 
+  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24"]
 
   enable_nat_gateway = true
   single_nat_gateway = true # Cost saving for assignment
@@ -40,7 +40,7 @@ resource "aws_db_instance" "default" {
   instance_class         = "db.t3.micro"
   db_name                = "audiodb"
   username               = "dbadmin"
-  password               = var.db_password # Injected via var or Secrets Manager
+  password               = var.db_password 
   vpc_security_group_ids = [aws_security_group.db_sg.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
   skip_final_snapshot    = true
