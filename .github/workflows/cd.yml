@@ -1,0 +1,88 @@
+name: CD
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  AWS_REGION: us-east-1
+  EKS_CLUSTER_NAME: audio-cluster
+
+jobs:
+  deploy:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./terraform
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply
+        # -auto-approve ensures no manual confirmation is needed
+        # We pass var inputs if not using a .tfvars file
+        run: terraform apply -auto-approve -var="db_password=${{ secrets.DB_PASSWORD }}" -var="rabbitmq_password=${{ secrets.RABBITMQ_PASSWORD }}"
+
+  # Phase 2: Build & Deploy Apps
+  deploy-apps:
+    name: Build & Deploy Apps
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build & Push Algo A
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd app/algorithm-a
+          docker build -t $ECR_REGISTRY/algorithm-a:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/algorithm-a:$IMAGE_TAG
+
+      - name: Build & Push Rest API
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd app/rest-api
+          docker build -t $ECR_REGISTRY/rest-api:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/rest-api:$IMAGE_TAG
+
+      # Phase 3: Update Kubernetes
+      - name: Update EKS
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+          
+          # Force K8s to pick up the new image tag
+          kubectl set image deployment/algorithm-a algorithm-a=$ECR_REGISTRY/algorithm-a:$IMAGE_TAG
+          kubectl set image deployment/rest-api rest-api=$ECR_REGISTRY/rest-api:$IMAGE_TAG
