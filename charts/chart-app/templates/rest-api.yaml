@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rest-api
+  labels:
+    app: rest-api
+spec:
+  replicas: {{ .Values.rest_api.replicaCount }}
+  selector:
+    matchLabels:
+      app: rest-api
+  template:
+    metadata:
+      labels:
+        app: rest-api
+    spec:
+      serviceAccountName: rest-api-sa
+      containers:
+        - name: rest-api
+          image: "{{ .Values.image.registry }}/rest-api:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.rest_api.service.port }}
+          resources:
+            {{- toYaml .Values.rest_api.resources | nindent 12 }}
+          env:
+            - name: DB_HOST
+              value: {{ .Values.rest_api.env.dbHost }}
+            - name: DB_NAME
+              value: {{ .Values.rest_api.env.dbName }}
+            - name: DB_USER
+              value: {{ .Values.rest_api.env.dbUser }}
+          volumeMounts:
+            - name: secrets-store-inline
+              mountPath: "/mnt/secrets-store"
+              readOnly: true
+      volumes:
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ .Values.secrets.providerClass }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rest-api-service
+spec:
+  type: {{ .Values.rest_api.service.type }}
+  selector:
+    app: rest-api
+  ports:
+    - port: {{ .Values.rest_api.service.port }}
+      targetPort: {{ .Values.rest_api.service.port }}
+      protocol: TCP
