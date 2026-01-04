@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: algorithm-a
+  labels:
+    app: algorithm-a
+spec:
+  replicas: {{ .Values.algorithm_a.replicaCount }}
+  selector:
+    matchLabels:
+      app: algorithm-a
+  template:
+    metadata:
+      labels:
+        app: algorithm-a
+    spec:
+      serviceAccountName: algorithm-a-sa
+      containers:
+        - name: algorithm-a
+          image: "{{ .Values.image.registry }}/algorithm-a:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.algorithm_a.resources | nindent 12 }}
+          env:
+            - name: RABBITMQ_HOST
+              value: {{ .Values.algorithm_a.env.rabbitmqHost }}
+          volumeMounts:
+            - name: secrets-store-inline
+              mountPath: "/mnt/secrets-store"
+              readOnly: true
+      volumes:
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ .Values.secrets.providerClass }}
