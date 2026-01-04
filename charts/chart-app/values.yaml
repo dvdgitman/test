@@ -1,0 +1,50 @@
+# Global Image Configuration
+image:
+  registry: "ecr.us-east-1.amazonaws.com" 
+
+secrets:
+  enabled: true
+  providerClass: "aws-secrets-provider"
+  secretName: "audio-app/secrets" 
+
+algorithm_a:
+  replicaCount: 2
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  env:
+    rabbitmqHost: "rabbitmq.default.svc.cluster.local"
+
+rest_api:
+  replicaCount: 2
+  service:
+    type: NodePort
+    port: 80
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    dbHost: "terraform-rds-endpoint.us-east-1.rds.amazonaws.com"
+    dbName: "audiodb"
+    dbUser: "dbadmin"
+
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    # Update this with your actual ACM Certificate ARN
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:123456789012:certificate/dummy"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}, {"HTTP":80}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+  hosts:
+    - host: api.example.com
+      paths:
+        - path: /api
+          pathType: Prefix
