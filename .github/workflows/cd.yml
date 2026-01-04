@@ -76,13 +76,12 @@ jobs:
           docker push $ECR_REGISTRY/rest-api:$IMAGE_TAG
 
       # Phase 3: Update Kubernetes
-      - name: Update EKS
+      - name: Deploy Apps
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
-          
-          # Force K8s to pick up the new image tag
-          kubectl set image deployment/algorithm-a algorithm-a=$ECR_REGISTRY/algorithm-a:$IMAGE_TAG
-          kubectl set image deployment/rest-api rest-api=$ECR_REGISTRY/rest-api:$IMAGE_TAG
+          helm upgrade --install audio-apps ./charts/chart-apps \
+            --set image.registry=$ECR_REGISTRY \
+            --set image.tag=$IMAGE_TAG \  
+            --wait
